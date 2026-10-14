@@ -16,11 +16,18 @@ public partial class MainWindow : Window
     private readonly AudioPlaybackService _audio = new();
     private ProgramOutputWindow? _programWindow;
     private string _activeSection = "Музыка";
+    private readonly Dictionary<string, List<string>> _playlists = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<AudioPlaybackService> _soundPlayers = new();
+    private string _currentAudioPath = string.Empty;
+    private int _soundSlotCount = 12;
+    private string PlaylistFile => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "taspaMIX", "playlists.json");
 
     public MainWindow()
     {
         InitializeComponent();
         MediaGrid.ItemsSource = _visibleMedia;
+        LoadPlaylists();
+        LoadMediaLibrary();
     }
 
     private void Section_Click(object sender, RoutedEventArgs e)
@@ -34,14 +41,15 @@ public partial class MainWindow : Window
         {
             "Музыка" => $"Аудиофайлов: {_allMedia.Count(x => x.Kind == "Аудио")}",
             "Видео" => $"Видеофайлов: {_allMedia.Count(x => x.Kind == "Видео")}",
-            "Плейлисты" => "Плейлисты будут отображаться отдельно от общей медиатеки.",
+            "Плейлисты" => $"Сохранённых плейлистов: {_playlists.Count}. Добавление треков сохраняется автоматически.",
             _ => $"Раздел «{section}»: функции подключаются поэтапно."
         };
     }
 
     private void AddFolder_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFolderDialog { Title = "Выберите папку с аудио и видео", Multiselect = false };
+        var kindFilter = _activeSection == "Видео" ? "Видео" : "Аудио";
+        var dialog = new OpenFolderDialog { Title = kindFilter == "Видео" ? "Выберите папку с видео" : "Выберите папку с музыкой", Multiselect = false };
         if (dialog.ShowDialog() != true) return;
         var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".mp4", ".mkv", ".mov", ".avi", ".wmv", ".webm" };
         int added = 0;
@@ -54,7 +62,7 @@ public partial class MainWindow : Window
                 var kind = ext is ".mp3" or ".wav" or ".flac" or ".m4a" or ".aac" or ".ogg" ? "Аудио" : "Видео";
                 _allMedia.Add(new MediaItem(System.IO.Path.GetFileNameWithoutExtension(path), kind, path)); added++;
             }
-            ApplyFilter(); LibraryStatus.Text = $"Добавлено: {added}; всего в сеансе: {_allMedia.Count}";
+            SaveMediaLibrary(); ApplyFilter(); LibraryStatus.Text = $"Добавлено: {added} файлов ({kindFilter}); библиотека сохранена.";
         }
         catch (UnauthorizedAccessException) { MessageBox.Show("Нет доступа к одной из папок.", "taspaMIX"); }
         catch (IOException ex) { MessageBox.Show($"Ошибка чтения: {ex.Message}", "taspaMIX"); }
@@ -73,7 +81,7 @@ public partial class MainWindow : Window
             "Видео" => _allMedia.Where(x => x.Kind == "Видео"),
             "Тычки" => Enumerable.Empty<MediaItem>(),
             "Конкурсы" => Enumerable.Empty<MediaItem>(),
-            "Плейлисты" => Enumerable.Empty<MediaItem>(),
+            "Плейлисты" => _playlists.SelectMany(p => p.Value.Select(path => new MediaItem(System.IO.Path.GetFileNameWithoutExtension(path), "Аудио", path, p.Key))),
             _ => _allMedia.AsEnumerable()
         };
         foreach (var item in sectionItems.Where(x => x.Name.Contains(query, StringComparison.CurrentCultureIgnoreCase) || x.Path.Contains(query, StringComparison.CurrentCultureIgnoreCase)))
@@ -115,7 +123,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Pause_Click(object sender, RoutedEventArgs e) => _audio.Pause();
+    private void Pause_Click(object sender, RoutedEventArgs e) => _audio.Pause();\n\n    private void Start_Click(object sender, RoutedEventArgs e) { _audio.Stop(); NowPlaying.Text = "Музыка остановлена — запуск программы"; Program_Click(sender, e); }
 
     private void Stop_Click(object sender, RoutedEventArgs e)
     {
@@ -167,26 +175,88 @@ public partial class MainWindow : Window
     {
         if (MediaGrid.SelectedItem is not MediaItem item || item.Kind != "Аудио")
         {
-            MessageBox.Show("Сначала выбери аудиотрек в разделе «Музыка».", "taspaMIX");
+            MessageBox.Show("Выбери аудиотрек в разделе «Музыка».", "taspaMIX");
             return;
         }
-        var dialog = new PlaylistNameWindow();
+        var dialog = new PlaylistNameWindow { Owner = this };
         if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.PlaylistName)) return;
+        var name = dialog.PlaylistName.Trim();
+        if (!_playlists.TryGetValue(name, out var tracks)) _playlists[name] = tracks = new List<string>();
+        if (!tracks.Contains(item.Path, StringComparer.OrdinalIgnoreCase)) tracks.Add(item.Path);
+        SavePlaylists();
+        LibraryStatus.Text = $"Автосохранено: «{item.Name}» → плейлист «{name}»";
+    }
+
+    private void LoadPlaylists()
+    {
         try
         {
-            var root = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "taspaMIX");
-            Directory.CreateDirectory(root);
-            var file = System.IO.Path.Combine(root, "playlists.json");
-            var data = File.Exists(file)
-                ? System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<string>>>(File.ReadAllText(file)) ?? new()
-                : new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-            if (!data.TryGetValue(dialog.PlaylistName.Trim(), out var tracks))
-                data[dialog.PlaylistName.Trim()] = tracks = new List<string>();
-            if (!tracks.Contains(item.Path, StringComparer.OrdinalIgnoreCase)) tracks.Add(item.Path);
-            File.WriteAllText(file, System.Text.Json.JsonSerializer.Serialize(data, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
-            LibraryStatus.Text = $"«{item.Name}» добавлен в плейлист «{dialog.PlaylistName.Trim()}»";
+            if (File.Exists(PlaylistFile))
+            {
+                var loaded = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<string>>>(File.ReadAllText(PlaylistFile));
+                if (loaded != null) foreach (var pair in loaded) _playlists[pair.Key] = pair.Value;
+            }
         }
-        catch (Exception ex) { MessageBox.Show($"Не удалось сохранить плейлист: {ex.Message}", "taspaMIX"); }
+        catch { }
+    }
+
+    private void SavePlaylists()
+    {
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(PlaylistFile)!);
+        File.WriteAllText(PlaylistFile, System.Text.Json.JsonSerializer.Serialize(_playlists, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        if (_activeSection == "Плейлисты") ApplyFilter();
+    }
+
+    private string MediaLibraryFile => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "taspaMIX", "media-library.json");
+
+    private void LoadMediaLibrary()
+    {
+        try
+        {
+            if (!File.Exists(MediaLibraryFile)) return;
+            var paths = System.Text.Json.JsonSerializer.Deserialize<List<string>>(File.ReadAllText(MediaLibraryFile)) ?? new();
+            foreach (var path in paths.Where(File.Exists))
+            {
+                var ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
+                var kind = ext is ".mp3" or ".wav" or ".flac" or ".m4a" or ".aac" or ".ogg" ? "Аудио" : "Видео";
+                if (_knownPaths.Add(path)) _allMedia.Add(new MediaItem(System.IO.Path.GetFileNameWithoutExtension(path), kind, path));
+            }
+            ApplyFilter();
+        }
+        catch { }
+    }
+
+    private void SaveMediaLibrary()
+    {
+        var root = System.IO.Path.GetDirectoryName(MediaLibraryFile)!;
+        Directory.CreateDirectory(root);
+        File.WriteAllText(MediaLibraryFile, System.Text.Json.JsonSerializer.Serialize(_allMedia.Select(x => x.Path).Distinct(StringComparer.OrdinalIgnoreCase).ToList(), new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private void Vocal_Click(object sender, RoutedEventArgs e)
+    {
+        MessageBox.Show("Подавление вокала требует обработки аудиосигнала (center-channel cancellation / AI source separation). Оно не может быть честно реализовано переключателем громкости; добавлю отдельный DSP-модуль следующим этапом.", "taspaMIX — Vocal");
+    }
+
+    private void PowerPoint_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "PowerPoint (*.pptx;*.ppt)|*.pptx;*.ppt", Title = "Выбери презентацию PowerPoint" };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            dynamic app = Activator.CreateInstance(Type.GetTypeFromProgID("PowerPoint.Application", true)!)!;
+            app.Visible = true;
+            dynamic presentation = app.Presentations.Open(dialog.FileName, true, false, false);
+            dynamic settings = presentation.SlideShowSettings;
+            var screens = System.Windows.Forms.Screen.AllScreens;
+            settings.ShowType = 3;
+            settings.Run();
+            LibraryStatus.Text = "PowerPoint запущен через Microsoft PowerPoint: анимации сохраняются. Управляй стрелками/пробелом; закрытие слайда — Esc.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Для сохранения анимаций нужен установленный Microsoft PowerPoint. Ошибка: " + ex.Message, "taspaMIX — PowerPoint");
+        }
     }
 
     private void LogoOverlay_Click(object sender, RoutedEventArgs e)
@@ -208,7 +278,7 @@ public partial class MainWindow : Window
     }
 }
 
-public sealed record MediaItem(string Name, string Kind, string Path);
+public sealed record MediaItem(string Name, string Kind, string Path, string Playlist = "");
 
 public sealed class ProgramOutputWindow : Window
 {
