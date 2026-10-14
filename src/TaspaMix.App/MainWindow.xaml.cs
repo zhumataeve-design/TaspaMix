@@ -417,6 +417,8 @@ public sealed class ProgramOutputWindow : Window
         Activate();
     }
 
+    public void SetMuted(bool muted) => _player.IsMuted = muted;
+
     public void StopPlayback()
     {
         _player.Stop();
