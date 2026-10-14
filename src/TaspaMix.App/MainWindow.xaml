@@ -5,7 +5,7 @@
    <DockPanel LastChildFill="True">
     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
      <Image Source="/Assets/taspaMIX-logo.png" Width="66" Height="52" Stretch="Uniform" Margin="0,0,8,0" ToolTip="Оригинальный логотип taspaMIX"/>
-     <StackPanel Margin="12,0,0,0" VerticalAlignment="Center"><TextBlock FontSize="30" FontWeight="Bold"><Run Text="taspa" Foreground="#F5F7FA"/><Run Text="MIX" Foreground="{StaticResource GoldBrush}"/></TextBlock><TextBlock Text="АУДИО  •  ВИДЕО  •  КОНТЕНТ  •  ВАШИ СОБЫТИЯ" FontSize="10" Foreground="#8DB1C5" CharacterSpacing="130"/></StackPanel>
+     <StackPanel Margin="12,0,0,0" VerticalAlignment="Center"><TextBlock FontSize="30" FontWeight="Bold"><Run Text="taspa" Foreground="#F5F7FA"/><Run Text="MIX" Foreground="{StaticResource GoldBrush}"/></TextBlock><TextBlock Text="АУДИО  •  ВИДЕО  •  КОНТЕНТ  •  ВАШИ СОБЫТИЯ" FontSize="10" Foreground="#8DB1C5"/></StackPanel>
     </StackPanel>
     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center"><StackPanel Margin="10,0" VerticalAlignment="Center"><TextBlock Text="taspaMIX • LIVE" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center"/><TextBlock Text="Пульт управления" FontSize="10" Foreground="{StaticResource MutedBrush}"/></StackPanel><Button Content="⚙ Настройки"/><Button Content="⛶ Полный экран" Click="Fullscreen_Click"/></StackPanel>
    </DockPanel>
