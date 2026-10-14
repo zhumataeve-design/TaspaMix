@@ -69,7 +69,7 @@ public partial class MainWindow : Window
                 var kind = ext is ".mp3" or ".wav" or ".flac" or ".m4a" or ".aac" or ".ogg" ? "Аудио" : "Видео";
                 if ((kindFilter == "Видео" && kind != "Видео") || (kindFilter == "Аудио" && kind != "Аудио")) continue;
                 if (!_knownPaths.Add(path)) continue;
-                _allMedia.Add(new MediaItem(System.IO.Path.GetFileNameWithoutExtension(path), kind, path)); added++;
+                _allMedia.Add(new MediaItem(System.IO.Path.GetFileNameWithoutExtension(path), kind, path) { Thumbnail = kind == "Видео" ? VideoThumbnailLoader.TryGetThumbnail(path) : null }); added++;
             }
             SaveMediaLibrary(); ApplyFilter(); LibraryStatus.Text = $"Добавлено: {added} файлов ({kindFilter}); библиотека сохранена.";
         }
@@ -185,6 +185,8 @@ public partial class MainWindow : Window
         try
         {
             if (_soundPlayers.Remove(slot, out var old)) old.Dispose();
+            _audio.Stop();
+            NowPlaying.Text = "Тычка играет — фоновая музыка остановлена";
             var player = new AudioPlaybackService();
             _soundPlayers[slot] = player;
             player.Play(path);
@@ -367,7 +369,7 @@ public partial class MainWindow : Window
             {
                 var ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
                 var kind = ext is ".mp3" or ".wav" or ".flac" or ".m4a" or ".aac" or ".ogg" ? "Аудио" : "Видео";
-                if (_knownPaths.Add(path)) _allMedia.Add(new MediaItem(System.IO.Path.GetFileNameWithoutExtension(path), kind, path));
+                if (_knownPaths.Add(path)) _allMedia.Add(new MediaItem(System.IO.Path.GetFileNameWithoutExtension(path), kind, path) { Thumbnail = kind == "Видео" ? VideoThumbnailLoader.TryGetThumbnail(path) : null });
             }
             ApplyFilter();
         }
@@ -439,7 +441,10 @@ public partial class MainWindow : Window
     }
 }
 
-public sealed record MediaItem(string Name, string Kind, string Path, string Playlist = "");
+public sealed record MediaItem(string Name, string Kind, string Path, string Playlist = "")
+{
+    public System.Windows.Media.ImageSource? Thumbnail { get; init; }
+}
 
 public sealed class ProgramOutputWindow : Window
 {
