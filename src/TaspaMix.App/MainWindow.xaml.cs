@@ -63,9 +63,11 @@ public partial class MainWindow : Window
         {
             foreach (var path in Directory.EnumerateFiles(dialog.FolderName, "*", SearchOption.AllDirectories))
             {
-                if (!supported.Contains(System.IO.Path.GetExtension(path)) || !_knownPaths.Add(path)) continue;
+                if (!supported.Contains(System.IO.Path.GetExtension(path))) continue;
                 var ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
                 var kind = ext is ".mp3" or ".wav" or ".flac" or ".m4a" or ".aac" or ".ogg" ? "Аудио" : "Видео";
+                if ((kindFilter == "Видео" && kind != "Видео") || (kindFilter == "Аудио" && kind != "Аудио")) continue;
+                if (!_knownPaths.Add(path)) continue;
                 _allMedia.Add(new MediaItem(System.IO.Path.GetFileNameWithoutExtension(path), kind, path)); added++;
             }
             SaveMediaLibrary(); ApplyFilter(); LibraryStatus.Text = $"Добавлено: {added} файлов ({kindFilter}); библиотека сохранена.";
