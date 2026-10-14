@@ -28,6 +28,8 @@ public partial class MainWindow : Window
     private readonly List<string> _contestFiles = new();
     private bool _videoMuted;
     private bool _vocalReducedUi;
+    private readonly System.Windows.Threading.DispatcherTimer _timelineTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private bool _updatingTimeline;
     private readonly Dictionary<int, string> _soundSlots = new();
     private string SoundSlotsFile => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "taspaMIX", "sound-slots.json");
     private string PlaylistFile => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "taspaMIX", "playlists.json");
@@ -41,6 +43,8 @@ public partial class MainWindow : Window
         LoadMediaLibrary();
         LoadSoundSlots();
         BuildSoundSlots();
+        _timelineTimer.Tick += TimelineTimer_Tick;
+        _timelineTimer.Start();
     }
 
     private void Section_Click(object sender, RoutedEventArgs e)
@@ -157,6 +161,12 @@ public partial class MainWindow : Window
     {
         _audio.Stop();
         _programWindow?.StopPlayback();
+        PreviewPlayer.Stop();
+        PreviewPlayer.Source = null;
+        _previewVideoPath = null;
+        PlaybackTimeline.Value = 0;
+        CurrentTimeText.Text = "00:00";
+        RemainingTimeText.Text = "Осталось 00:00";
         NowPlaying.Text = "Ничего не воспроизводится";
     }
 
@@ -310,6 +320,28 @@ public partial class MainWindow : Window
         catch { MessageBox.Show("Сначала запусти презентацию PowerPoint.", "taspaMIX"); }
     }
 
+    private void PreviewPlayer_MediaOpened(object sender, RoutedEventArgs e) { UpdateVideoTimeline(); }
+    private void PreviewPlayer_MediaEnded(object sender, RoutedEventArgs e) { try { PreviewPlayer.Stop(); PreviewPlayer.Position = TimeSpan.Zero; } catch { } PlaybackTimeline.Value = 0; }
+    private void TimelineTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_audio.TotalTime > TimeSpan.Zero && (_audio.IsPlaying || _audio.CurrentTime > TimeSpan.Zero))
+        {
+            var total = _audio.TotalTime.TotalSeconds; var current = _audio.CurrentTime.TotalSeconds;
+            _updatingTimeline = true; PlaybackTimeline.Value = total > 0 ? current / total * 1000 : 0; _updatingTimeline = false;
+            CurrentTimeText.Text = FormatTime(_audio.CurrentTime); RemainingTimeText.Text = "Осталось " + FormatTime(TimeSpan.FromSeconds(Math.Max(0, total-current))); return;
+        }
+        UpdateVideoTimeline();
+    }
+    private void UpdateVideoTimeline()
+    {
+        try { if (PreviewPlayer.Source == null || !PreviewPlayer.NaturalDuration.HasTimeSpan) return; var total=PreviewPlayer.NaturalDuration.TimeSpan; var current=PreviewPlayer.Position; _updatingTimeline=true; PlaybackTimeline.Value=total.TotalSeconds>0 ? current.TotalSeconds/total.TotalSeconds*1000 : 0; _updatingTimeline=false; CurrentTimeText.Text=FormatTime(current); RemainingTimeText.Text="Осталось "+FormatTime(TimeSpan.FromSeconds(Math.Max(0,total.TotalSeconds-current.TotalSeconds))); } catch { }
+    }
+    private void PlaybackTimeline_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_updatingTimeline || PlaybackTimeline is null) return;
+        try { if (_audio.TotalTime>TimeSpan.Zero && (_audio.IsPlaying || _audio.CurrentTime>TimeSpan.Zero)) _audio.Seek(TimeSpan.FromSeconds(_audio.TotalTime.TotalSeconds*PlaybackTimeline.Value/1000)); else if(PreviewPlayer.Source!=null && PreviewPlayer.NaturalDuration.HasTimeSpan) PreviewPlayer.Position=TimeSpan.FromSeconds(PreviewPlayer.NaturalDuration.TimeSpan.TotalSeconds*PlaybackTimeline.Value/1000); } catch { }
+    }
+    private static string FormatTime(TimeSpan t) => $"{(int)t.TotalMinutes:00}:{t.Seconds:00}";
     private void PreviewPlayer_MediaFailed(object sender, ExceptionRoutedEventArgs e)
     {
         LibraryStatus.Text = "Preview не смог открыть этот формат. Попробуй MP4 с H.264/AAC.";
@@ -329,6 +361,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _timelineTimer.Stop();
         _audio.Dispose();
         foreach (var player in _soundPlayers.Values) player.Dispose();
         _programWindow?.Close();
