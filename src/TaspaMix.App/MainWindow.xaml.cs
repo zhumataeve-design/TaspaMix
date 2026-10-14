@@ -24,11 +24,18 @@ public partial class MainWindow : Window
 
     private void Section_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: string section })
+        if (sender is not Button { Tag: string section }) return;
+        _activeSection = section;
+        SectionTitle.Text = section;
+        SearchBox.Text = string.Empty;
+        ApplyFilter();
+        LibraryStatus.Text = section switch
         {
-            SectionTitle.Text = section;
-            LibraryStatus.Text = section == "Музыка" ? $"Файлов в текущем сеансе: {_allMedia.Count}" : $"Раздел «{section}»: интерфейс подготовлен, функции будут подключаться поэтапно.";
-        }
+            "Музыка" => $"Аудиофайлов: {_allMedia.Count(x => x.Kind == "Аудио")}",
+            "Видео" => $"Видеофайлов: {_allMedia.Count(x => x.Kind == "Видео")}",
+            "Плейлисты" => "Плейлисты будут отображаться отдельно от общей медиатеки.",
+            _ => $"Раздел «{section}»: функции подключаются поэтапно."
+        };
     }
 
     private void AddFolder_Click(object sender, RoutedEventArgs e)
