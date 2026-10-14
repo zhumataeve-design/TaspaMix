@@ -118,6 +118,7 @@ public partial class MainWindow : Window
                 return;
             }
 
+            _audio.Stop();
             if (_programWindow == null || !_programWindow.IsLoaded)
                 _programWindow = new ProgramOutputWindow();
             _programWindow.ShowOnOutputScreen();
