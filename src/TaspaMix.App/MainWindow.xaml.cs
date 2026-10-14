@@ -110,6 +110,32 @@ public partial class MainWindow : Window
         base.OnClosed(e);
     }
 
+
+    private void Fullscreen_Click(object sender, RoutedEventArgs e)
+    {
+        if (WindowStyle == WindowStyle.None)
+        {
+            WindowStyle = WindowStyle.SingleBorderWindow;
+            WindowState = WindowState.Normal;
+        }
+        else
+        {
+            WindowStyle = WindowStyle.None;
+            WindowState = WindowState.Maximized;
+        }
+    }
+
+    private void Program_Click(object sender, RoutedEventArgs e)
+    {
+        MessageBox.Show("Program Output пока является макетом. Реальный вывод на HDMI будет подключён отдельным этапом.", "taspaMIX");
+    }
+
+    private void Scene_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.Tag is string scene)
+            MessageBox.Show($"Выбрана сцена «{scene}». Загрузка медиа-содержимого сцены будет подключена следующим этапом.", "taspaMIX");
+    }
+
     private void DetectDisplays_Click(object sender, RoutedEventArgs e)
     {
         var screens = System.Windows.Forms.Screen.AllScreens;
