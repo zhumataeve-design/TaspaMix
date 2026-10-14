@@ -1,0 +1,14 @@
+# Build outputs
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.suo
+artifacts/
+TestResults/
+
+# Local user data
+*.db
+*.db-shm
+*.db-wal
