@@ -14,6 +14,8 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<MediaItem> _visibleMedia = new();
     private readonly HashSet<string> _knownPaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly AudioPlaybackService _audio = new();
+    private ProgramOutputWindow? _programWindow;
+    private MediaItem? _selectedVideo;
     private string _activeSection = "Музыка";
 
     public MainWindow()
@@ -82,15 +84,36 @@ public partial class MainWindow : Window
     private void Play_Click(object sender, RoutedEventArgs e)
     {
         if (MediaGrid.SelectedItem is not MediaItem item) { MessageBox.Show("Сначала выберите файл в списке.", "taspaMIX"); return; }
-        if (item.Kind != "Аудио") { MessageBox.Show("Пока доступно воспроизведение аудиофайлов. Видеодвижок будет добавлен отдельно.", "taspaMIX"); return; }
+        PlayMedia(item);
+    }
+
+    private void MediaGrid_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (MediaGrid.SelectedItem is MediaItem item) PlayMedia(item);
+    }
+
+    private void PlayMedia(MediaItem item)
+    {
         try
         {
-            _audio.Play(item.Path);
-            NowPlaying.Text = $"♫ {item.Name}";
+            if (item.Kind == "Аудио")
+            {
+                _audio.Play(item.Path);
+                NowPlaying.Text = $"♫ {item.Name}";
+                return;
+            }
+
+            _selectedVideo = item;
+            if (_programWindow == null || !_programWindow.IsLoaded)
+                _programWindow = new ProgramOutputWindow();
+            _programWindow.ShowOnOutputScreen();
+            _programWindow.PlayFile(item.Path);
+            NowPlaying.Text = $"▣ Видео: {item.Name}";
+            LibraryStatus.Text = $"Видео запущено: {item.Name}";
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Не удалось воспроизвести файл:\n{ex.Message}", "taspaMIX");
+            MessageBox.Show($"Не удалось открыть медиафайл:\n{ex.Message}", "taspaMIX");
         }
     }
 
@@ -145,3 +168,57 @@ public partial class MainWindow : Window
 }
 
 public sealed record MediaItem(string Name, string Kind, string Path);
+
+public sealed class ProgramOutputWindow : Window
+{
+    private readonly MediaElement _player;
+
+    public ProgramOutputWindow()
+    {
+        Title = "taspaMIX — Program Output";
+        Background = System.Windows.Media.Brushes.Black;
+        WindowStyle = WindowStyle.None;
+        ResizeMode = ResizeMode.NoResize;
+        ShowInTaskbar = true;
+        _player = new MediaElement
+        {
+            LoadedBehavior = MediaState.Manual,
+            UnloadedBehavior = MediaState.Stop,
+            Stretch = System.Windows.Media.Stretch.Uniform,
+            Volume = 1
+        };
+        Content = _player;
+        KeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Escape) Hide(); };
+    }
+
+    public void ShowOnOutputScreen()
+    {
+        var screens = System.Windows.Forms.Screen.AllScreens;
+        var target = screens.FirstOrDefault(s => !s.Primary) ?? screens.FirstOrDefault();
+        if (target != null)
+        {
+            Left = target.Bounds.Left;
+            Top = target.Bounds.Top;
+            Width = target.Bounds.Width;
+            Height = target.Bounds.Height;
+        }
+        Show();
+        WindowState = WindowState.Maximized;
+        Activate();
+    }
+
+    public void PlayFile(string path)
+    {
+        _player.Stop();
+        _player.Source = new Uri(path, UriKind.Absolute);
+        _player.Position = TimeSpan.Zero;
+        _player.Play();
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _player.Stop();
+        _player.Source = null;
+        base.OnClosed(e);
+    }
+}
