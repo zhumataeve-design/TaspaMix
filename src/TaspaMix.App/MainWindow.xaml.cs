@@ -19,7 +19,9 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, List<string>> _playlists = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<AudioPlaybackService> _soundPlayers = new();
     private string _currentAudioPath = string.Empty;
-    private object? _powerPointPresentation;\n    private bool _videoMuted;\n    private bool _vocalReducedUi;
+    private object? _powerPointPresentation;
+    private bool _videoMuted;
+    private bool _vocalReducedUi;
     private readonly Dictionary<int, string> _soundSlots = new();
     private string SoundSlotsFile => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "taspaMIX", "sound-slots.json");
     private int _soundSlotCount = 12;
@@ -127,7 +129,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Pause_Click(object sender, RoutedEventArgs e) => _audio.Pause();\n\n    private void Start_Click(object sender, RoutedEventArgs e) { _audio.Stop(); NowPlaying.Text = "Музыка остановлена — запуск программы"; Program_Click(sender, e); }
+    private void Pause_Click(object sender, RoutedEventArgs e) => _audio.Pause();
+
+    private void Start_Click(object sender, RoutedEventArgs e) { _audio.Stop(); NowPlaying.Text = "Музыка остановлена — запуск программы"; Program_Click(sender, e); }
 
     private void Stop_Click(object sender, RoutedEventArgs e)
     {
