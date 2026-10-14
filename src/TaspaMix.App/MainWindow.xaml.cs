@@ -15,7 +15,6 @@ public partial class MainWindow : Window
     private readonly HashSet<string> _knownPaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly AudioPlaybackService _audio = new();
     private ProgramOutputWindow? _programWindow;
-    private MediaItem? _selectedVideo;
     private string _activeSection = "Музыка";
 
     public MainWindow()
@@ -122,6 +121,7 @@ public partial class MainWindow : Window
     private void Stop_Click(object sender, RoutedEventArgs e)
     {
         _audio.Stop();
+        _programWindow?.StopPlayback();
         NowPlaying.Text = "Ничего не воспроизводится";
     }
 
@@ -130,6 +130,7 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _audio.Dispose();
+        _programWindow?.Close();
         base.OnClosed(e);
     }
 
@@ -150,7 +151,48 @@ public partial class MainWindow : Window
 
     private void Program_Click(object sender, RoutedEventArgs e)
     {
-        MessageBox.Show("Program Output пока является макетом. Реальный вывод на HDMI будет подключён отдельным этапом.", "taspaMIX");
+        if (MediaGrid.SelectedItem is not MediaItem item)
+        {
+            MessageBox.Show("Выбери видео в списке, затем нажми «НА ЭКРАН».", "taspaMIX");
+            return;
+        }
+        if (item.Kind != "Видео")
+        {
+            MessageBox.Show("Для вывода на экран выбери видеофайл.", "taspaMIX");
+            return;
+        }
+        PlayMedia(item);
+    }
+
+    private void AddToPlaylist_Click(object sender, RoutedEventArgs e)
+    {
+        if (MediaGrid.SelectedItem is not MediaItem item || item.Kind != "Аудио")
+        {
+            MessageBox.Show("Сначала выбери аудиотрек в разделе «Музыка».", "taspaMIX");
+            return;
+        }
+        var dialog = new PlaylistNameWindow();
+        if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.PlaylistName)) return;
+        try
+        {
+            var root = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "taspaMIX");
+            Directory.CreateDirectory(root);
+            var file = System.IO.Path.Combine(root, "playlists.json");
+            var data = File.Exists(file)
+                ? System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, List<string>>>(File.ReadAllText(file)) ?? new()
+                : new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            if (!data.TryGetValue(dialog.PlaylistName.Trim(), out var tracks))
+                data[dialog.PlaylistName.Trim()] = tracks = new List<string>();
+            if (!tracks.Contains(item.Path, StringComparer.OrdinalIgnoreCase)) tracks.Add(item.Path);
+            File.WriteAllText(file, System.Text.Json.JsonSerializer.Serialize(data, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            LibraryStatus.Text = $"«{item.Name}» добавлен в плейлист «{dialog.PlaylistName.Trim()}»";
+        }
+        catch (Exception ex) { MessageBox.Show($"Не удалось сохранить плейлист: {ex.Message}", "taspaMIX"); }
+    }
+
+    private void LogoOverlay_Click(object sender, RoutedEventArgs e)
+    {
+        MessageBox.Show("Оригинальный логотип taspaMIX встроен в шапку. Вывод логотипа поверх Program-видео будет подключён отдельно.", "taspaMIX");
     }
 
     private void Scene_Click(object sender, RoutedEventArgs e)
@@ -220,5 +262,30 @@ public sealed class ProgramOutputWindow : Window
         _player.Stop();
         _player.Source = null;
         base.OnClosed(e);
+    }
+}
+
+public sealed class PlaylistNameWindow : Window
+{
+    private readonly TextBox _nameBox;
+    public string PlaylistName => _nameBox.Text;
+
+    public PlaylistNameWindow()
+    {
+        Title = "Добавить в плейлист";
+        Width = 380;
+        Height = 165;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ResizeMode = ResizeMode.NoResize;
+        Background = System.Windows.Media.Brushes.DarkSlateGray;
+        Foreground = System.Windows.Media.Brushes.White;
+        var panel = new StackPanel { Margin = new Thickness(16) };
+        panel.Children.Add(new TextBlock { Text = "Название плейлиста", Margin = new Thickness(0, 0, 0, 8) });
+        _nameBox = new TextBox { Text = "Мой плейлист", Padding = new Thickness(8), Margin = new Thickness(0, 0, 0, 10) };
+        panel.Children.Add(_nameBox);
+        var save = new Button { Content = "Сохранить", Padding = new Thickness(10, 6, 10, 6), IsDefault = true, HorizontalAlignment = HorizontalAlignment.Right };
+        save.Click += (_, _) => { if (!string.IsNullOrWhiteSpace(PlaylistName)) DialogResult = true; };
+        panel.Children.Add(save);
+        Content = panel;
     }
 }
