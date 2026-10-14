@@ -17,14 +17,14 @@ public partial class MainWindow : Window
     private ProgramOutputWindow? _programWindow;
     private string _activeSection = "Музыка";
     private readonly Dictionary<string, List<string>> _playlists = new(StringComparer.OrdinalIgnoreCase);
-    private readonly List<AudioPlaybackService> _soundPlayers = new();
+    private readonly Dictionary<int, AudioPlaybackService> _soundPlayers = new();
+    private readonly Dictionary<int, Button> _soundSlotButtons = new();
     private string _currentAudioPath = string.Empty;
     private object? _powerPointPresentation;
     private bool _videoMuted;
     private bool _vocalReducedUi;
     private readonly Dictionary<int, string> _soundSlots = new();
     private string SoundSlotsFile => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "taspaMIX", "sound-slots.json");
-    private int _soundSlotCount = 12;
     private string PlaylistFile => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "taspaMIX", "playlists.json");
 
     public MainWindow()
@@ -34,6 +34,7 @@ public partial class MainWindow : Window
         LoadPlaylists();
         LoadMediaLibrary();
         LoadSoundSlots();
+        BuildSoundSlots();
     }
 
     private void Section_Click(object sender, RoutedEventArgs e)
@@ -145,23 +146,49 @@ public partial class MainWindow : Window
 
     private void Placeholder_Click(object sender, RoutedEventArgs e) => MessageBox.Show("Выбери слот звука и назначь ему аудиофайл.", "taspaMIX");
 
+    private void BuildSoundSlots()
+    {
+        SoundSlotsPanel.Items.Clear();
+        _soundSlotButtons.Clear();
+        for (int i = 1; i <= 30; i++)
+        {
+            var slot = i;
+            var label = _soundSlots.TryGetValue(slot, out var path) && File.Exists(path)
+                ? $"{slot:00} · {System.IO.Path.GetFileNameWithoutExtension(path)}"
+                : $"{slot:00} · Назначить";
+            var button = new Button { Content = label, Tag = slot, Margin = new Thickness(3), MinHeight = 42, ToolTip = "Нажми: назначить / воспроизвести / остановить" };
+            button.Click += SoundSlot_Click;
+            _soundSlotButtons[slot] = button;
+            SoundSlotsPanel.Items.Add(button);
+        }
+    }
+
     private void SoundSlot_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button button || !int.TryParse(button.Tag?.ToString(), out var slot)) return;
+        if (_soundPlayers.TryGetValue(slot, out var playing) && playing.IsPlaying)
+        {
+            playing.Stop();
+            playing.Dispose();
+            _soundPlayers.Remove(slot);
+            LibraryStatus.Text = $"Тычка {slot:00} остановлена.";
+            return;
+        }
         if (!_soundSlots.TryGetValue(slot, out var path) || !File.Exists(path))
         {
             var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Аудио|*.mp3;*.wav;*.flac;*.m4a;*.aac;*.ogg", Title = "Назначить звук для слота " + slot };
             if (dialog.ShowDialog() != true) return;
             _soundSlots[slot] = path = dialog.FileName;
             SaveSoundSlots();
-            button.Content = System.IO.Path.GetFileNameWithoutExtension(path);
+            button.Content = $"{slot:00} · {System.IO.Path.GetFileNameWithoutExtension(path)}";
         }
         try
         {
+            if (_soundPlayers.Remove(slot, out var old)) old.Dispose();
             var player = new AudioPlaybackService();
-            _soundPlayers.Add(player);
+            _soundPlayers[slot] = player;
             player.Play(path);
-            LibraryStatus.Text = "Тычка " + slot + ": " + System.IO.Path.GetFileName(path);
+            LibraryStatus.Text = $"Тычка {slot:00} играет один раз. Нажми этот же слот ещё раз для остановки.";
         }
         catch (Exception ex) { MessageBox.Show("Не удалось воспроизвести тычку: " + ex.Message, "taspaMIX"); }
     }
@@ -192,13 +219,47 @@ public partial class MainWindow : Window
             MessageBox.Show("Выбери видео в библиотеке, чтобы загрузить его в Preview.", "taspaMIX");
             return;
         }
+        LoadPreview(item.Path);
+    }
+
+    private void Media_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop) ? System.Windows.DragDropEffects.Copy : System.Windows.DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void Preview_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] files)
+        {
+            var path = files.FirstOrDefault(IsVideoFile);
+            if (path != null) LoadPreview(path);
+            else LibraryStatus.Text = "Перетащи видеофайл (MP4, MKV, MOV, AVI) в окно Preview.";
+        }
+    }
+
+    private void Program_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] files)
+        {
+            var path = files.FirstOrDefault(IsVideoFile);
+            if (path != null) PlayMedia(new MediaItem(System.IO.Path.GetFileNameWithoutExtension(path), "Видео", path));
+            else LibraryStatus.Text = "Перетащи видеофайл в окно Program.";
+        }
+    }
+
+    private static bool IsVideoFile(string path) =>
+        new[] { ".mp4", ".mkv", ".mov", ".avi", ".wmv", ".webm" }.Contains(System.IO.Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
+    private void LoadPreview(string path)
+    {
         try
         {
             PreviewPlayer.Stop();
-            PreviewPlayer.Source = new Uri(item.Path, UriKind.Absolute);
+            PreviewPlayer.Source = new Uri(path, UriKind.Absolute);
             PreviewPlayer.Position = TimeSpan.Zero;
             PreviewPlayer.Play();
-            LibraryStatus.Text = "Preview: " + item.Name + ". Нажми «НА ЭКРАН», чтобы отправить видео на Program.";
+            LibraryStatus.Text = "Видео загружено в Preview: " + System.IO.Path.GetFileName(path);
         }
         catch (Exception ex) { MessageBox.Show("Не удалось загрузить Preview: " + ex.Message, "taspaMIX"); }
     }
@@ -223,6 +284,7 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _audio.Dispose();
+        foreach (var player in _soundPlayers.Values) player.Dispose();
         _programWindow?.Close();
         base.OnClosed(e);
     }
