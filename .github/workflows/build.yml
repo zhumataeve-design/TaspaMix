@@ -1,0 +1,41 @@
+name: Build taspaMIX
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Show SDK
+        run: dotnet --info
+
+      - name: Restore
+        run: dotnet restore TaspaMix.sln
+
+      - name: Build Release
+        run: dotnet build TaspaMix.sln --configuration Release --no-restore
+
+      - name: Publish portable app
+        run: dotnet publish src/TaspaMix.App/TaspaMix.App.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --output artifacts/taspaMIX-win-x64
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: taspaMIX-win-x64
+          path: artifacts/taspaMIX-win-x64/
+          if-no-files-found: error
