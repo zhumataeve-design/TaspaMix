@@ -19,7 +19,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, List<string>> _playlists = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<AudioPlaybackService> _soundPlayers = new();
     private string _currentAudioPath = string.Empty;
-    private object? _powerPointPresentation;
+    private object? _powerPointPresentation;\n    private bool _videoMuted;\n    private bool _vocalReducedUi;
     private readonly Dictionary<int, string> _soundSlots = new();
     private string SoundSlotsFile => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "taspaMIX", "sound-slots.json");
     private int _soundSlotCount = 12;
@@ -314,7 +314,19 @@ public partial class MainWindow : Window
 
     private void Vocal_Click(object sender, RoutedEventArgs e)
     {
-        MessageBox.Show("Подавление вокала требует обработки аудиосигнала (center-channel cancellation / AI source separation). Оно не может быть честно реализовано переключателем громкости; добавлю отдельный DSP-модуль следующим этапом.", "taspaMIX — Vocal");
+        _audio.ToggleVocalReduction();
+        _vocalReducedUi = _audio.VocalReduced;
+        if (sender is Button button) button.Content = _vocalReducedUi ? "VOCAL: OFF" : "VOCAL: ON";
+        LibraryStatus.Text = _vocalReducedUi
+            ? "Vocal reduction включён (стерео center-cancel; результат зависит от сведения трека)."
+            : "Оригинальное стерео-воспроизведение восстановлено.";
+    }
+
+    private void ToggleVideoAudio_Click(object sender, RoutedEventArgs e)
+    {
+        _videoMuted = !_videoMuted;
+        _programWindow?.SetMuted(_videoMuted);
+        if (sender is Button button) button.Content = _videoMuted ? "VIDEO AUDIO: OFF" : "VIDEO AUDIO: ON";
     }
 
     private void PowerPoint_Click(object sender, RoutedEventArgs e)
