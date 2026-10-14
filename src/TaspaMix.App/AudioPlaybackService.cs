@@ -15,6 +15,7 @@ public sealed class AudioPlaybackService : IDisposable
     public bool VocalReduced => _vocalReduced;
     public TimeSpan CurrentTime => _reader?.CurrentTime ?? TimeSpan.Zero;
     public TimeSpan TotalTime => _reader?.TotalTime ?? TimeSpan.Zero;
+    public void Seek(TimeSpan position) { if (_reader is not null) _reader.CurrentTime = position < TimeSpan.Zero ? TimeSpan.Zero : (position > _reader.TotalTime ? _reader.TotalTime : position); }
 
     public void Play(string filePath) { _currentPath = filePath; StartPlayback(filePath); }
 
