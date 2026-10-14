@@ -14,6 +14,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<MediaItem> _visibleMedia = new();
     private readonly HashSet<string> _knownPaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly AudioPlaybackService _audio = new();
+    private string _activeSection = "Музыка";
 
     public MainWindow()
     {
@@ -58,7 +59,16 @@ public partial class MainWindow : Window
         if (MediaGrid is null) return;
         var query = SearchBox?.Text?.Trim() ?? string.Empty;
         _visibleMedia.Clear();
-        foreach (var item in _allMedia.Where(x => x.Name.Contains(query, StringComparison.CurrentCultureIgnoreCase) || x.Path.Contains(query, StringComparison.CurrentCultureIgnoreCase)))
+        var sectionItems = _activeSection switch
+        {
+            "Музыка" => _allMedia.Where(x => x.Kind == "Аудио"),
+            "Видео" => _allMedia.Where(x => x.Kind == "Видео"),
+            "Тычки" => Enumerable.Empty<MediaItem>(),
+            "Конкурсы" => Enumerable.Empty<MediaItem>(),
+            "Плейлисты" => Enumerable.Empty<MediaItem>(),
+            _ => _allMedia.AsEnumerable()
+        };
+        foreach (var item in sectionItems.Where(x => x.Name.Contains(query, StringComparison.CurrentCultureIgnoreCase) || x.Path.Contains(query, StringComparison.CurrentCultureIgnoreCase)))
             _visibleMedia.Add(item);
     }
 
