@@ -16,7 +16,8 @@ internal static class VideoThumbnailLoader
         IntPtr bitmap = IntPtr.Zero;
         try
         {
-            SHCreateItemFromParsingName(path, IntPtr.Zero, ref ImageFactoryId, out var factory);
+            var iid = ImageFactoryId;
+            SHCreateItemFromParsingName(path, IntPtr.Zero, ref iid, out var factory);
             factory.GetImage(new NativeSize(240, 135), 0x8 | 0x20, out bitmap);
             if (bitmap == IntPtr.Zero) return null;
             var source = Imaging.CreateBitmapSourceFromHBitmap(bitmap, IntPtr.Zero, Int32Rect.Empty, BitmapSizeOptions.FromWidthAndHeight(240, 135));
