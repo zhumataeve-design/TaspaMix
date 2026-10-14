@@ -139,13 +139,9 @@ public partial class MainWindow : Window
                 return;
             }
 
-            _audio.Stop();
-            if (_programWindow == null || !_programWindow.IsLoaded)
-                _programWindow = new ProgramOutputWindow();
-            _programWindow.ShowOnOutputScreen();
-            _programWindow.PlayFile(item.Path);
-            NowPlaying.Text = $"▣ Видео: {item.Name}";
-            LibraryStatus.Text = $"Видео запущено: {item.Name}";
+            LoadPreview(item.Path);
+            NowPlaying.Text = "Видео загружено в Preview: " + item.Name;
+            LibraryStatus.Text = "Предпросмотр без звука. Нажми «НА ЭКРАН», чтобы вывести на второй монитор.";
         }
         catch (Exception ex)
         {
@@ -448,24 +444,36 @@ public partial class MainWindow : Window
 
     private void PowerPoint_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "PowerPoint (*.pptx;*.ppt)|*.pptx;*.ppt", Title = "Выбери презентацию PowerPoint" };
-        if (dialog.ShowDialog() != true) return;
+        string? presentationPath = null;
+        if (MediaGrid.SelectedItem is MediaItem item && item.Kind == "Конкурс" &&
+            System.IO.Path.GetExtension(item.Path).ToLowerInvariant() is ".ppt" or ".pptx")
+            presentationPath = item.Path;
+        if (presentationPath == null)
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = "PowerPoint (*.pptx;*.ppt)|*.pptx;*.ppt|Все файлы (*.*)|*.*",
+                Title = "Выбери презентацию PowerPoint"
+            };
+            if (dialog.ShowDialog() != true) return;
+            presentationPath = dialog.FileName;
+        }
         try
         {
             dynamic app = Activator.CreateInstance(Type.GetTypeFromProgID("PowerPoint.Application", true)!)!;
             app.Visible = true;
-            dynamic presentation = app.Presentations.Open(dialog.FileName, true, false, false);
+            dynamic presentation = app.Presentations.Open(presentationPath, true, false, false);
             _powerPointPresentation = presentation;
+            _powerPointPaused = false;
             dynamic settings = presentation.SlideShowSettings;
-            var screens = System.Windows.Forms.Screen.AllScreens;
             settings.ShowType = 1;
             settings.Run();
-            ProgramStatus.Text = "POWERPOINT • " + System.IO.Path.GetFileName(dialog.FileName);
-            LibraryStatus.Text = "PowerPoint запущен. Управляй слайдами кнопками Program.";
+            ProgramStatus.Text = "POWERPOINT • " + System.IO.Path.GetFileName(presentationPath);
+            LibraryStatus.Text = "PowerPoint запущен. Используй кнопки назад, пауза и вперёд в панели Program.";
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Для сохранения анимаций нужен установленный Microsoft PowerPoint. Ошибка: " + ex.Message, "taspaMIX — PowerPoint");
+            MessageBox.Show("Для запуска презентации требуется установленный Microsoft PowerPoint. Подробности: " + ex.Message, "taspaMIX");
         }
     }
 
