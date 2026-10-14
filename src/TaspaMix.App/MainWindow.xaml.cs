@@ -102,7 +102,6 @@ public partial class MainWindow : Window
                 return;
             }
 
-            _selectedVideo = item;
             if (_programWindow == null || !_programWindow.IsLoaded)
                 _programWindow = new ProgramOutputWindow();
             _programWindow.ShowOnOutputScreen();
@@ -249,6 +248,12 @@ public sealed class ProgramOutputWindow : Window
         Activate();
     }
 
+    public void StopPlayback()
+    {
+        _player.Stop();
+        _player.Source = null;
+    }
+
     public void PlayFile(string path)
     {
         _player.Stop();
@@ -283,7 +288,7 @@ public sealed class PlaylistNameWindow : Window
         panel.Children.Add(new TextBlock { Text = "Название плейлиста", Margin = new Thickness(0, 0, 0, 8) });
         _nameBox = new System.Windows.Controls.TextBox { Text = "Мой плейлист", Padding = new Thickness(8), Margin = new Thickness(0, 0, 0, 10) };
         panel.Children.Add(_nameBox);
-        var save = new Button { Content = "Сохранить", Padding = new Thickness(10, 6, 10, 6), IsDefault = true, HorizontalAlignment = HorizontalAlignment.Right };
+        var save = new Button { Content = "Сохранить", Padding = new Thickness(10, 6, 10, 6), IsDefault = true, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
         save.Click += (_, _) => { if (!string.IsNullOrWhiteSpace(PlaylistName)) DialogResult = true; };
         panel.Children.Add(save);
         Content = panel;
