@@ -21,6 +21,11 @@ public partial class MainWindow : Window
     private readonly Dictionary<int, Button> _soundSlotButtons = new();
     private string _currentAudioPath = string.Empty;
     private object? _powerPointPresentation;
+    private string? _previewVideoPath;
+    private bool _previewAudioEnabled;
+    private bool _powerPointPaused;
+    private string ContestFilesFile => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "taspaMIX", "contest-files.json");
+    private readonly List<string> _contestFiles = new();
     private bool _videoMuted;
     private bool _vocalReducedUi;
     private readonly Dictionary<int, string> _soundSlots = new();
@@ -32,6 +37,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         MediaGrid.ItemsSource = _visibleMedia;
         LoadPlaylists();
+        LoadContestFiles();
         LoadMediaLibrary();
         LoadSoundSlots();
         BuildSoundSlots();
@@ -55,26 +61,40 @@ public partial class MainWindow : Window
 
     private void AddFolder_Click(object sender, RoutedEventArgs e)
     {
-        var kindFilter = _activeSection == "Видео" ? "Видео" : "Аудио";
-        var dialog = new OpenFolderDialog { Title = kindFilter == "Видео" ? "Выберите папку с видео" : "Выберите папку с музыкой", Multiselect = false };
+        if (_activeSection == "Видео") { AddMediaFiles("Видео", "Видео (*.mp4;*.mkv;*.mov;*.avi;*.wmv;*.webm)|*.mp4;*.mkv;*.mov;*.avi;*.wmv;*.webm"); return; }
+        if (_activeSection == "Конкурсы") { AddContestFile(); return; }
+        AddMediaFiles("Аудио", "Музыка (*.mp3;*.wav;*.flac;*.m4a;*.aac;*.ogg)|*.mp3;*.wav;*.flac;*.m4a;*.aac;*.ogg");
+    }
+
+    private void AddMediaFiles(string kind, string filter)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = filter + "|Все файлы (*.*)|*.*", Title = kind == "Видео" ? "Выбрать видеофайлы" : "Выбрать аудиофайлы", Multiselect = true };
         if (dialog.ShowDialog() != true) return;
-        var supported = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".mp4", ".mkv", ".mov", ".avi", ".wmv", ".webm" };
         int added = 0;
-        try
+        foreach (var path in dialog.FileNames)
         {
-            foreach (var path in Directory.EnumerateFiles(dialog.FolderName, "*", SearchOption.AllDirectories))
-            {
-                if (!supported.Contains(System.IO.Path.GetExtension(path))) continue;
-                var ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
-                var kind = ext is ".mp3" or ".wav" or ".flac" or ".m4a" or ".aac" or ".ogg" ? "Аудио" : "Видео";
-                if ((kindFilter == "Видео" && kind != "Видео") || (kindFilter == "Аудио" && kind != "Аудио")) continue;
-                if (!_knownPaths.Add(path)) continue;
-                _allMedia.Add(new MediaItem(System.IO.Path.GetFileNameWithoutExtension(path), kind, path) { Thumbnail = kind == "Видео" ? VideoThumbnailLoader.TryGetThumbnail(path) : null }); added++;
-            }
-            SaveMediaLibrary(); ApplyFilter(); LibraryStatus.Text = $"Добавлено: {added} файлов ({kindFilter}); библиотека сохранена.";
+            if (!_knownPaths.Add(path)) continue;
+            _allMedia.Add(new MediaItem(System.IO.Path.GetFileNameWithoutExtension(path), kind, path) { Thumbnail = kind == "Видео" ? VideoThumbnailLoader.TryGetThumbnail(path) : null });
+            added++;
         }
-        catch (UnauthorizedAccessException) { MessageBox.Show("Нет доступа к одной из папок.", "taspaMIX"); }
-        catch (IOException ex) { MessageBox.Show($"Ошибка чтения: {ex.Message}", "taspaMIX"); }
+        SaveMediaLibrary(); ApplyFilter();
+        LibraryStatus.Text = "Добавлено файлов: " + added;
+    }
+
+    private void AddContestFile()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Презентации и файлы конкурса (*.pptx;*.ppt;*.pdf;*.docx;*.xlsx)|*.pptx;*.ppt;*.pdf;*.docx;*.xlsx|Все файлы (*.*)|*.*", Title = "Выбрать файл конкурса или презентацию", Multiselect = true };
+        if (dialog.ShowDialog() != true) return;
+        foreach (var path in dialog.FileNames) if (!_contestFiles.Contains(path, StringComparer.OrdinalIgnoreCase)) _contestFiles.Add(path);
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(ContestFilesFile)!);
+        File.WriteAllText(ContestFilesFile, System.Text.Json.JsonSerializer.Serialize(_contestFiles, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        ApplyFilter();
+        LibraryStatus.Text = "Файлов добавлено в «Конкурсы»: " + dialog.FileNames.Length;
+    }
+
+    private void LoadContestFiles()
+    {
+        try { if (File.Exists(ContestFilesFile)) _contestFiles.AddRange(System.Text.Json.JsonSerializer.Deserialize<List<string>>(File.ReadAllText(ContestFilesFile)) ?? new()); } catch { }
     }
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e) => ApplyFilter();
@@ -89,7 +109,7 @@ public partial class MainWindow : Window
             "Музыка" => _allMedia.Where(x => x.Kind == "Аудио"),
             "Видео" => _allMedia.Where(x => x.Kind == "Видео"),
             "Тычки" => Enumerable.Empty<MediaItem>(),
-            "Конкурсы" => Enumerable.Empty<MediaItem>(),
+            "Конкурсы" => _contestFiles.Select(path => new MediaItem(System.IO.Path.GetFileNameWithoutExtension(path), "Конкурс", path)),
             "Плейлисты" => _playlists.SelectMany(p => p.Value.Select(path => new MediaItem(System.IO.Path.GetFileNameWithoutExtension(path), "Аудио", path, p.Key))),
             _ => _allMedia.AsEnumerable()
         };
@@ -260,10 +280,38 @@ public partial class MainWindow : Window
             PreviewPlayer.Stop();
             PreviewPlayer.Source = new Uri(path, UriKind.Absolute);
             PreviewPlayer.Position = TimeSpan.Zero;
+            PreviewPlayer.IsMuted = !_previewAudioEnabled;
             PreviewPlayer.Play();
-            LibraryStatus.Text = "Видео загружено в Preview: " + System.IO.Path.GetFileName(path);
+            _previewVideoPath = path;
+            PreviewAudioButton.Content = _previewAudioEnabled ? "Звук Preview: ON" : "Звук Preview: OFF";
+            LibraryStatus.Text = "Видео в Preview без звука. Нажми «НА ЭКРАН» для вывода на экран 2.";
         }
         catch (Exception ex) { MessageBox.Show("Не удалось загрузить Preview: " + ex.Message, "taspaMIX"); }
+    }
+
+    private void PreviewAudio_Click(object sender, RoutedEventArgs e)
+    {
+        _previewAudioEnabled = !_previewAudioEnabled;
+        PreviewPlayer.IsMuted = !_previewAudioEnabled;
+        PreviewAudioButton.Content = _previewAudioEnabled ? "Звук Preview: ON" : "Звук Preview: OFF";
+    }
+
+    private void ProgramPause_Click(object sender, RoutedEventArgs e)
+    {
+        if (_powerPointPresentation != null) { PowerPointPause_Click(sender, e); return; }
+        _programWindow?.TogglePause();
+    }
+
+    private void PowerPointPause_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            dynamic p = _powerPointPresentation!;
+            if (!_powerPointPaused) p.SlideShowWindow.View.Pause(); else p.SlideShowWindow.View.Resume();
+            _powerPointPaused = !_powerPointPaused;
+            ProgramPauseButton.Content = _powerPointPaused ? "▶ Продолжить" : "Ⅱ Пауза";
+        }
+        catch { MessageBox.Show("Сначала запусти презентацию PowerPoint.", "taspaMIX"); }
     }
 
     private void PreviewPlayer_MediaFailed(object sender, ExceptionRoutedEventArgs e)
@@ -273,13 +321,13 @@ public partial class MainWindow : Window
 
     private void PowerPointNext_Click(object sender, RoutedEventArgs e)
     {
-        try { dynamic presentation = _powerPointPresentation!; presentation.SlideShowWindow.View.Next(); }
+        try { dynamic presentation = _powerPointPresentation!; presentation.SlideShowWindow.View.Next(); ProgramStatus.Text = "POWERPOINT • слайд " + presentation.SlideShowWindow.View.CurrentShowPosition; }
         catch { MessageBox.Show("Сначала запусти презентацию PowerPoint.", "taspaMIX"); }
     }
 
     private void PowerPointPrevious_Click(object sender, RoutedEventArgs e)
     {
-        try { dynamic presentation = _powerPointPresentation!; presentation.SlideShowWindow.View.Previous(); }
+        try { dynamic presentation = _powerPointPresentation!; presentation.SlideShowWindow.View.Previous(); ProgramStatus.Text = "POWERPOINT • слайд " + presentation.SlideShowWindow.View.CurrentShowPosition; }
         catch { MessageBox.Show("Сначала запусти презентацию PowerPoint.", "taspaMIX"); }
     }
 
@@ -308,17 +356,15 @@ public partial class MainWindow : Window
 
     private void Program_Click(object sender, RoutedEventArgs e)
     {
-        if (MediaGrid.SelectedItem is not MediaItem item)
-        {
-            MessageBox.Show("Выбери видео в списке, затем нажми «НА ЭКРАН».", "taspaMIX");
-            return;
-        }
-        if (item.Kind != "Видео")
-        {
-            MessageBox.Show("Для вывода на экран выбери видеофайл.", "taspaMIX");
-            return;
-        }
-        PlayMedia(item);
+        var path = _previewVideoPath;
+        if (string.IsNullOrWhiteSpace(path) && MediaGrid.SelectedItem is MediaItem selected && selected.Kind == "Видео") path = selected.Path;
+        if (string.IsNullOrWhiteSpace(path)) { MessageBox.Show("Сначала выбери видео и загрузи его в Preview.", "taspaMIX"); return; }
+        _audio.Stop();
+        if (_programWindow == null || !_programWindow.IsLoaded) _programWindow = new ProgramOutputWindow();
+        _programWindow.ShowOnOutputScreen();
+        _programWindow.PlayFile(path);
+        ProgramStatus.Text = "VIDEO • " + System.IO.Path.GetFileName(path);
+        LibraryStatus.Text = "Видео отправлено на экран 2.";
     }
 
     private void AddToPlaylist_Click(object sender, RoutedEventArgs e)
@@ -412,9 +458,10 @@ public partial class MainWindow : Window
             _powerPointPresentation = presentation;
             dynamic settings = presentation.SlideShowSettings;
             var screens = System.Windows.Forms.Screen.AllScreens;
-            settings.ShowType = 3;
+            settings.ShowType = 1;
             settings.Run();
-            LibraryStatus.Text = "PowerPoint запущен через Microsoft PowerPoint: анимации сохраняются. Управляй стрелками/пробелом; закрытие слайда — Esc.";
+            ProgramStatus.Text = "POWERPOINT • " + System.IO.Path.GetFileName(dialog.FileName);
+            LibraryStatus.Text = "PowerPoint запущен. Управляй слайдами кнопками Program.";
         }
         catch (Exception ex)
         {
@@ -485,6 +532,11 @@ public sealed class ProgramOutputWindow : Window
     }
 
     public void SetMuted(bool muted) => _player.IsMuted = muted;
+
+    public void TogglePause()
+    {
+        try { _player.Pause(); } catch { try { _player.Play(); } catch { } }
+    }
 
     public void StopPlayback()
     {
