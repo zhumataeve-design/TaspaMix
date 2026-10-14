@@ -11,6 +11,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<MediaItem> _allMedia = new();
     private readonly ObservableCollection<MediaItem> _visibleMedia = new();
     private readonly HashSet<string> _knownPaths = new(StringComparer.OrdinalIgnoreCase);
+    private readonly AudioPlaybackService _audio = new();
 
     public MainWindow()
     {
@@ -53,18 +54,43 @@ public partial class MainWindow : Window
     private void ApplyFilter()
     {
         if (MediaGrid is null) return;
-        var query = SearchBox?.Text?.Trim() ?? string.Empty; _visibleMedia.Clear();
-        foreach (var item in _allMedia.Where(x => x.Name.Contains(query, StringComparison.CurrentCultureIgnoreCase) || x.Path.Contains(query, StringComparison.CurrentCultureIgnoreCase))) _visibleMedia.Add(item);
+        var query = SearchBox?.Text?.Trim() ?? string.Empty;
+        _visibleMedia.Clear();
+        foreach (var item in _allMedia.Where(x => x.Name.Contains(query, StringComparison.CurrentCultureIgnoreCase) || x.Path.Contains(query, StringComparison.CurrentCultureIgnoreCase)))
+            _visibleMedia.Add(item);
     }
 
     private void Play_Click(object sender, RoutedEventArgs e)
     {
         if (MediaGrid.SelectedItem is not MediaItem item) { MessageBox.Show("Сначала выберите файл в списке.", "taspaMIX"); return; }
-        NowPlaying.Text = item.Name;
-        MessageBox.Show($"Файл выбран:\n{item.Path}\n\nВоспроизведение пока не реализовано — аудиодвижок будет следующим этапом.", "taspaMIX");
+        if (item.Kind != "Аудио") { MessageBox.Show("Пока доступно воспроизведение аудиофайлов. Видеодвижок будет добавлен отдельно.", "taspaMIX"); return; }
+        try
+        {
+            _audio.Play(item.Path);
+            NowPlaying.Text = $"♫ {item.Name}";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Не удалось воспроизвести файл:\n{ex.Message}", "taspaMIX");
+        }
     }
-    private void Stop_Click(object sender, RoutedEventArgs e) => NowPlaying.Text = "Ничего не воспроизводится";
-    private void Placeholder_Click(object sender, RoutedEventArgs e) => MessageBox.Show("Функция пока является макетом интерфейса и будет реализована отдельным этапом.", "taspaMIX");
+
+    private void Pause_Click(object sender, RoutedEventArgs e) => _audio.Pause();
+
+    private void Stop_Click(object sender, RoutedEventArgs e)
+    {
+        _audio.Stop();
+        NowPlaying.Text = "Ничего не воспроизводится";
+    }
+
+    private void Placeholder_Click(object sender, RoutedEventArgs e) => MessageBox.Show("Звуковые слоты и остальные функции будут реализованы следующим этапом.", "taspaMIX");
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _audio.Dispose();
+        base.OnClosed(e);
+    }
+
     private void DetectDisplays_Click(object sender, RoutedEventArgs e)
     {
         var screens = System.Windows.Forms.Screen.AllScreens;
