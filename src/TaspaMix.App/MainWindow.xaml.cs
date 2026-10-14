@@ -468,6 +468,19 @@ public partial class MainWindow : Window
             dynamic settings = presentation.SlideShowSettings;
             settings.ShowType = 1;
             settings.Run();
+            try
+            {
+                dynamic showWindow = presentation.SlideShowWindow;
+                var outputScreen = System.Windows.Forms.Screen.AllScreens.FirstOrDefault(s => !s.Primary);
+                if (outputScreen != null)
+                {
+                    showWindow.Left = outputScreen.Bounds.Left;
+                    showWindow.Top = outputScreen.Bounds.Top;
+                    showWindow.Width = outputScreen.Bounds.Width;
+                    showWindow.Height = outputScreen.Bounds.Height;
+                }
+            }
+            catch { }
             ProgramStatus.Text = "POWERPOINT • " + System.IO.Path.GetFileName(presentationPath);
             LibraryStatus.Text = "PowerPoint запущен. Используй кнопки назад, пауза и вперёд в панели Program.";
         }
@@ -504,6 +517,7 @@ public sealed record MediaItem(string Name, string Kind, string Path, string Pla
 public sealed class ProgramOutputWindow : Window
 {
     private readonly MediaElement _player;
+    private bool _paused;
 
     public ProgramOutputWindow()
     {
@@ -543,7 +557,12 @@ public sealed class ProgramOutputWindow : Window
 
     public void TogglePause()
     {
-        try { _player.Pause(); } catch { try { _player.Play(); } catch { } }
+        try
+        {
+            if (_paused) _player.Play(); else _player.Pause();
+            _paused = !_paused;
+        }
+        catch { }
     }
 
     public void StopPlayback()
