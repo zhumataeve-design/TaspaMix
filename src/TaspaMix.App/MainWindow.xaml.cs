@@ -523,19 +523,17 @@ public partial class MainWindow : Window
             _powerPointPresentation = presentation;
             _powerPointPaused = false;
             dynamic settings = presentation.SlideShowSettings;
+            var outputScreen = System.Windows.Forms.Screen.AllScreens.FirstOrDefault(s => !s.Primary);
+            if (outputScreen == null) { presentation.Close(); MessageBox.Show("Подключи второй экран и включи режим «Расширить эти экраны» перед запуском презентации.", "taspaMIX"); return; }
             settings.ShowType = 1;
             settings.Run();
             try
             {
                 dynamic showWindow = presentation.SlideShowWindow;
-                var outputScreen = System.Windows.Forms.Screen.AllScreens.FirstOrDefault(s => !s.Primary);
-                if (outputScreen != null)
-                {
-                    showWindow.Left = outputScreen.Bounds.Left;
-                    showWindow.Top = outputScreen.Bounds.Top;
-                    showWindow.Width = outputScreen.Bounds.Width;
-                    showWindow.Height = outputScreen.Bounds.Height;
-                }
+                showWindow.Left = outputScreen.Bounds.Left;
+                showWindow.Top = outputScreen.Bounds.Top;
+                showWindow.Width = outputScreen.Bounds.Width;
+                showWindow.Height = outputScreen.Bounds.Height;
             }
             catch { }
             ProgramStatus.Text = "POWERPOINT • " + System.IO.Path.GetFileName(presentationPath);
