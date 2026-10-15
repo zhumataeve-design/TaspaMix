@@ -398,20 +398,35 @@ public partial class MainWindow : Window
 
     private void AddToPlaylist_Click(object sender, RoutedEventArgs e)
     {
-        if (MediaGrid.SelectedItem is not MediaItem item || item.Kind != "Аудио")
-        {
-            MessageBox.Show("Выбери аудиотрек в разделе «Музыка».", "taspaMIX");
-            return;
-        }
-        var dialog = new PlaylistNameWindow { Owner = this };
+        if (MediaGrid.SelectedItem is not MediaItem item || item.Kind != "Аудио") { MessageBox.Show("Выбери аудиотрек в разделе «Музыка».", "taspaMIX"); return; }
+        var dialog = new PlaylistNameWindow(_playlists.Keys.ToList()) { Owner = this };
         if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.PlaylistName)) return;
         var name = dialog.PlaylistName.Trim();
         if (!_playlists.TryGetValue(name, out var tracks)) _playlists[name] = tracks = new List<string>();
         if (!tracks.Contains(item.Path, StringComparer.OrdinalIgnoreCase)) tracks.Add(item.Path);
-        SavePlaylists();
-        LibraryStatus.Text = $"Автосохранено: «{item.Name}» → плейлист «{name}»";
+        SavePlaylists(); LibraryStatus.Text = $"Добавлено: «{item.Name}» → плейлист «{name}»";
     }
 
+    private void RenamePlaylist_Click(object sender, RoutedEventArgs e)
+    {
+        var oldName = (MediaGrid.SelectedItem as MediaItem)?.Playlist;
+        if (string.IsNullOrWhiteSpace(oldName) || !_playlists.ContainsKey(oldName)) { MessageBox.Show("Открой «Плейлисты» и выбери трек нужного плейлиста.", "taspaMIX"); return; }
+        var dialog = new PlaylistNameWindow(_playlists.Keys.ToList(), oldName) { Owner = this };
+        if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.PlaylistName)) return;
+        var newName = dialog.PlaylistName.Trim();
+        if (string.Equals(oldName, newName, StringComparison.OrdinalIgnoreCase)) return;
+        if (_playlists.ContainsKey(newName)) { MessageBox.Show("Плейлист с таким названием уже существует.", "taspaMIX"); return; }
+        _playlists[newName] = _playlists[oldName]; _playlists.Remove(oldName); SavePlaylists();
+        LibraryStatus.Text = $"Плейлист «{oldName}» переименован в «{newName}».";
+    }
+
+    private void RemoveFromPlaylist_Click(object sender, RoutedEventArgs e)
+    {
+        if (MediaGrid.SelectedItem is not MediaItem item || string.IsNullOrWhiteSpace(item.Playlist) || !_playlists.TryGetValue(item.Playlist, out var tracks)) { MessageBox.Show("Выбери трек в разделе «Плейлисты».", "taspaMIX"); return; }
+        tracks.RemoveAll(p => string.Equals(p, item.Path, StringComparison.OrdinalIgnoreCase));
+        if (tracks.Count == 0) _playlists.Remove(item.Playlist);
+        SavePlaylists(); LibraryStatus.Text = $"Трек «{item.Name}» удалён из плейлиста.";
+    }
     private void LoadPlaylists()
     {
         try
