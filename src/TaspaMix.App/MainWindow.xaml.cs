@@ -559,7 +559,6 @@ public partial class MainWindow : Window
     private void DetectDisplays_Click(object sender, RoutedEventArgs e)
     {
         var screens = System.Windows.Forms.Screen.AllScreens;
-        DisplayStatus.Text = $"ЭКРАНОВ: {screens.Length}";
         MessageBox.Show(string.Join(Environment.NewLine, screens.Select((s, i) => $"{i + 1}. {s.DeviceName} — {(s.Primary ? "основной" : "дополнительный")} — {s.Bounds.Width}×{s.Bounds.Height}")), "Дисплеи Windows");
     }
 }
