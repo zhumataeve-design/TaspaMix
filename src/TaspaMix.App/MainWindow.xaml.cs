@@ -161,6 +161,8 @@ public partial class MainWindow : Window
     {
         _audio.Stop();
         _programWindow?.StopPlayback();
+        ProgramMonitor.Stop();
+        ProgramMonitor.Source = null;
         PreviewPlayer.Stop();
         PreviewPlayer.Source = null;
         _previewVideoPath = null;
@@ -306,6 +308,7 @@ public partial class MainWindow : Window
     {
         if (_powerPointPresentation != null) { PowerPointPause_Click(sender, e); return; }
         _programWindow?.TogglePause();
+        try { if (ProgramMonitor.Source != null) { if (_programWindow?.IsPaused == true) ProgramMonitor.Pause(); else ProgramMonitor.Play(); } } catch { }
     }
 
     private void PowerPointPause_Click(object sender, RoutedEventArgs e)
@@ -363,6 +366,7 @@ public partial class MainWindow : Window
     {
         _timelineTimer.Stop();
         _audio.Dispose();
+        ProgramMonitor.Stop();
         foreach (var player in _soundPlayers.Values) player.Dispose();
         _programWindow?.Close();
         base.OnClosed(e);
@@ -392,6 +396,11 @@ public partial class MainWindow : Window
         if (_programWindow == null || !_programWindow.IsLoaded) _programWindow = new ProgramOutputWindow();
         _programWindow.ShowOnOutputScreen();
         _programWindow.PlayFile(path);
+        ProgramMonitor.Stop();
+        ProgramMonitor.Source = new Uri(path, UriKind.Absolute);
+        ProgramMonitor.IsMuted = true;
+        ProgramMonitor.Position = TimeSpan.Zero;
+        ProgramMonitor.Play();
         ProgramStatus.Text = "VIDEO • " + System.IO.Path.GetFileName(path);
         LibraryStatus.Text = "Видео отправлено на экран 2.";
     }
@@ -566,6 +575,7 @@ public sealed class ProgramOutputWindow : Window
 {
     private readonly MediaElement _player;
     private bool _paused;
+    public bool IsPaused => _paused;
 
     public ProgramOutputWindow()
     {
@@ -621,6 +631,7 @@ public sealed class ProgramOutputWindow : Window
 
     public void PlayFile(string path)
     {
+        _paused = false;
         _player.Stop();
         _player.Source = new Uri(path, UriKind.Absolute);
         _player.Position = TimeSpan.Zero;
