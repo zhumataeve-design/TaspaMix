@@ -640,7 +640,7 @@ public sealed class PlaylistNameWindow : Window
     private readonly System.Windows.Controls.TextBox _nameBox;
     public string PlaylistName => _nameBox.Text;
 
-    public PlaylistNameWindow()
+    public PlaylistNameWindow(List<string>? existingNames = null, string? initialName = null)
     {
         Title = "Добавить в плейлист";
         Width = 380;
@@ -651,7 +651,7 @@ public sealed class PlaylistNameWindow : Window
         Foreground = System.Windows.Media.Brushes.White;
         var panel = new StackPanel { Margin = new Thickness(16) };
         panel.Children.Add(new TextBlock { Text = "Название плейлиста", Margin = new Thickness(0, 0, 0, 8) });
-        _nameBox = new System.Windows.Controls.TextBox { Text = "Мой плейлист", Padding = new Thickness(8), Margin = new Thickness(0, 0, 0, 10) };
+        _nameBox = new System.Windows.Controls.TextBox { Text = initialName ?? "Мой плейлист", Padding = new Thickness(8), Margin = new Thickness(0, 0, 0, 10) };
         panel.Children.Add(_nameBox);
         var save = new Button { Content = "Сохранить", Padding = new Thickness(10, 6, 10, 6), IsDefault = true, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
         save.Click += (_, _) => { if (!string.IsNullOrWhiteSpace(PlaylistName)) DialogResult = true; };
