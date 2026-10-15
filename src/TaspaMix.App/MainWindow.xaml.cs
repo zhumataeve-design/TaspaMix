@@ -394,7 +394,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(path)) { MessageBox.Show("Сначала выбери видео и загрузи его в Preview.", "taspaMIX"); return; }
         _audio.Stop();
         if (_programWindow == null || !_programWindow.IsLoaded) _programWindow = new ProgramOutputWindow();
-        _programWindow.ShowOnOutputScreen();
+        if (!_programWindow.ShowOnOutputScreen()) { MessageBox.Show("Подключи второй экран и включи режим «Расширить эти экраны». Видео не будет открыто на основном экране.", "taspaMIX"); return; }
         _programWindow.PlayFile(path);
         ProgramMonitor.Stop();
         ProgramMonitor.Source = new Uri(path, UriKind.Absolute);
@@ -595,22 +595,16 @@ public sealed class ProgramOutputWindow : Window
         KeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Escape) Hide(); };
     }
 
-    public void ShowOnOutputScreen()
+    public bool ShowOnOutputScreen()
     {
-        var screens = System.Windows.Forms.Screen.AllScreens;
-        var target = screens.FirstOrDefault(s => !s.Primary) ?? screens.FirstOrDefault();
-        if (target != null)
-        {
-            Left = target.Bounds.Left;
-            Top = target.Bounds.Top;
-            Width = target.Bounds.Width;
-            Height = target.Bounds.Height;
-        }
-        Show();
-        WindowState = WindowState.Maximized;
-        Activate();
+        var target = System.Windows.Forms.Screen.AllScreens.FirstOrDefault(s => !s.Primary);
+        if (target == null) return false;
+        WindowState = WindowState.Normal;
+        Left = target.Bounds.Left; Top = target.Bounds.Top;
+        Width = target.Bounds.Width; Height = target.Bounds.Height;
+        Show(); WindowState = WindowState.Maximized;
+        return true;
     }
-
     public void SetMuted(bool muted) => _player.IsMuted = muted;
 
     public void TogglePause()
